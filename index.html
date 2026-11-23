@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>מונה כניסות</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;800;900&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#f4f6fb; --card:#fff; --line:#e3e7f0; --txt:#14213d; --mut:#6b7590; --acc:#2563eb; --acc2:#16a34a; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --txt:#f1f5f9; --mut:#94a3b8; --acc:#60a5fa; --acc2:#4ade80; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--txt); font-family:'Heebo',system-ui,sans-serif; padding:20px 16px 40px; }
+main { max-width:720px; margin:0 auto; }
+h1 { margin:0 0 4px; font-size:30px; font-weight:900; }
+.sub { color:var(--mut); margin:0 0 18px; }
+.sum { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px; }
+.sum div { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 8px; text-align:center; }
+.sum b { display:block; font-size:30px; font-weight:900; color:var(--acc); font-variant-numeric:tabular-nums; }
+.sum small { color:var(--mut); }
+.site { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; }
+.site .info { flex:1; min-width:0; }
+.site a.name { color:var(--txt); font-weight:800; font-size:19px; text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.site a.name:hover { color:var(--acc); }
+.site .url { color:var(--mut); font-size:13px; direction:ltr; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bar { height:6px; background:var(--line); border-radius:99px; margin-top:8px; overflow:hidden; }
+.bar div { height:100%; background:linear-gradient(90deg,var(--acc2),var(--acc)); border-radius:99px; }
+.nums { display:flex; gap:14px; text-align:center; flex:none; }
+.nums b { display:block; font-size:22px; font-weight:900; font-variant-numeric:tabular-nums; }
+.nums .tot b { color:var(--acc); font-size:26px; }
+.nums small { color:var(--mut); font-size:12px; }
+.foot { color:var(--mut); font-size:14px; text-align:center; margin-top:18px; line-height:1.6; }
+.foot a { color:var(--acc); }
+.btn { border:1px solid var(--line); background:var(--card); color:var(--txt); border-radius:12px; padding:8px 14px; font:inherit; font-weight:700; cursor:pointer; }
+.top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+@media (max-width:480px) { .nums { gap:8px; } .nums b { font-size:18px; } .nums .tot b { font-size:22px; } .site { flex-wrap:wrap; } .nums { width:100%; justify-content:space-around; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>📊 מונה כניסות</h1><p class="sub">כל האתרים שלי ב-GitHub</p></div>
+    <button class="btn" id="refresh">🔄 רענון</button>
+  </div>
+  <div class="sum">
+    <div><b id="s-today">–</b><small>היום</small></div>
+    <div><b id="s-week">–</b><small>7 ימים</small></div>
+    <div><b id="s-total">–</b><small>סך הכל</small></div>
+  </div>
+  <div id="list"><p class="sub">טוען...</p></div>
+  <p class="foot">
+    הספירה התחילה ב-23.11.2026. המספרים מתעדכנים בהשהיה של עד כמה דקות.<br>
+    לגרפים, מכשירים ומדינות: <a href="https://siporeysaba.goatcounter.com" target="_blank" rel="noopener">לוח GoatCounter</a>
+  </p>
+</main>
+<script>
+const USER = 'siporeySaba', GC = 'https://siporeysaba.goatcounter.com';
+// אתרים שהכתובת שלהם שונה מ-github.io/שם
+const URLS = { s01: 'https://siporeysaba.com/' };
+// אם קריאת ה-API של GitHub נכשלת (מגבלת שימוש) – הרשימה הזאת
+const FALLBACK = ['s01', 'RunWalk', 'MyFamilyTask', 'BarMizva', 'MikraTargom', 'daf-yomi-app'];
+const HIDE = ['stats'];
+
+const $ = id => document.getElementById(id);
+const ymd = d => d.toISOString().slice(0, 10);
+const num = s => +String(s || 0).replace(/\D/g, '') || 0;
+const fmt = n => n.toLocaleString('he-IL');
+
+async function repos() {
+  try {
+    const r = await fetch(`https://api.github.com/users/${USER}/repos?per_page=100`);
+    if (!r.ok) throw 0;
+    const list = (await r.json()).filter(x => x.has_pages && !HIDE.includes(x.name));
+    if (!list.length) throw 0;
+    return list.map(x => ({ name: x.name, url: URLS[x.name] || x.homepage || `https://siporeysaba.github.io/${x.name}/` }));
+  } catch (e) {
+    return FALLBACK.map(n => ({ name: n, url: URLS[n] || `https://siporeysaba.github.io/${n}/` }));
+  }
+}
+async function count(name, start) {
+  try {
+    const q = new URLSearchParams({ _: Date.now() }); if (start) q.set('start', start);
+    const r = await fetch(`${GC}/counter/site-${encodeURIComponent(name)}.json?${q}`);
+    return num((await r.json()).count);
+  } catch (e) { return 0; }
+}
+async function title(s) {
+  try {
+    const t = (await (await fetch(s.url)).text()).match(/<title[^>]*>([^<]*)<\/title>/i);
+    if (t && t[1].trim()) return t[1].trim();
+  } catch (e) {}
+  return s.name;
+}
+async function load() {
+  $('list').innerHTML = '<p class="sub">טוען...</p>';
+  const today = ymd(new Date()), week = ymd(new Date(Date.now() - 6 * 864e5));
+  const sites = await repos();
+  await Promise.all(sites.map(async s => {
+    [s.total, s.today, s.week, s.title] = await Promise.all([count(s.name), count(s.name, today), count(s.name, week), title(s)]);
+  }));
+  sites.sort((a, b) => b.total - a.total || b.week - a.week);
+  const max = Math.max(1, ...sites.map(s => s.total));
+  $('s-today').textContent = fmt(sites.reduce((a, s) => a + s.today, 0));
+  $('s-week').textContent = fmt(sites.reduce((a, s) => a + s.week, 0));
+  $('s-total').textContent = fmt(sites.reduce((a, s) => a + s.total, 0));
+  const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  $('list').innerHTML = sites.map(s => `
+    <div class="site">
+      <div class="info">
+        <a class="name" href="${s.url}" target="_blank" rel="noopener">${esc(s.title)}</a>
+        <div class="url">${esc(s.url.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</div>
+        <div class="bar"><div style="width:${100 * s.total / max}%"></div></div>
+      </div>
+      <div class="nums">
+        <div><b>${fmt(s.today)}</b><small>היום</small></div>
+        <div><b>${fmt(s.week)}</b><small>7 ימים</small></div>
+        <div class="tot"><b>${fmt(s.total)}</b><small>סה״כ</small></div>
+      </div>
+    </div>`).join('');
+}
+$('refresh').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>
