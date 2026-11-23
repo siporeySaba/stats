@@ -19,7 +19,16 @@ h1 { margin:0 0 4px; font-size:30px; font-weight:900; }
 .sum { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px; }
 .sum div { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 8px; text-align:center; }
 .sum b { display:block; font-size:30px; font-weight:900; color:var(--acc); font-variant-numeric:tabular-nums; }
-.sum small { color:var(--mut); }
+.sum small { color:var(--mut); display:block; }
+.sum i, .nums i { display:block; font-style:normal; color:var(--mut); font-size:12px; margin-top:2px; }
+h2 { font-size:21px; margin:26px 0 10px; }
+.top5 { list-style:none; padding:0; margin:0; counter-reset:n; }
+.top5 li { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 14px; margin-bottom:8px; counter-increment:n; }
+.top5 li::before { content:counter(n); font-weight:900; color:var(--acc); font-size:20px; width:20px; text-align:center; flex:none; }
+.top5 a { flex:1; min-width:0; color:var(--txt); text-decoration:none; font-weight:700; line-height:1.35; }
+.top5 .c { text-align:center; flex:none; }
+.top5 .c b { display:block; font-size:20px; color:var(--acc); font-variant-numeric:tabular-nums; }
+.top5 .c small { color:var(--mut); font-size:12px; }
 .site { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; }
 .site .info { flex:1; min-width:0; }
 .site a.name { color:var(--txt); font-weight:800; font-size:19px; text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -45,12 +54,15 @@ h1 { margin:0 0 4px; font-size:30px; font-weight:900; }
     <button class="btn" id="refresh">🔄 רענון</button>
   </div>
   <div class="sum">
-    <div><b id="s-today">–</b><small>היום</small></div>
-    <div><b id="s-week">–</b><small>7 ימים</small></div>
-    <div><b id="s-total">–</b><small>סך הכל</small></div>
+    <div><b id="s-today">–</b><small>מבקרים היום</small><i id="v-today"></i></div>
+    <div><b id="s-week">–</b><small>מבקרים 7 ימים</small><i id="v-week"></i></div>
+    <div><b id="s-total">–</b><small>מבקרים סה״כ</small><i id="v-total"></i></div>
   </div>
   <div id="list"><p class="sub">טוען...</p></div>
+  <h2>🎬 חמשת הפרקים הנצפים ביותר בסיפורי סבא</h2>
+  <ol class="top5" id="top5"><li class="sub">טוען...</li></ol>
   <p class="foot">
+    <b>מבקרים</b> = אנשים (מי שעובר בין כמה עמודים נספר פעם אחת). <b>צפיות</b> = כל פתיחה של עמוד.<br>
     הספירה התחילה ב-23.11.2026. המספרים מתעדכנים בהשהיה של עד כמה דקות.<br>
     לגרפים, מכשירים ומדינות: <a href="https://siporeysaba.goatcounter.com" target="_blank" rel="noopener">לוח GoatCounter</a>
   </p>
@@ -79,17 +91,18 @@ async function repos() {
     return FALLBACK.map(n => ({ name: n, url: URLS[n] || `https://siporeysaba.github.io/${n}/` }));
   }
 }
-async function count(name, start) {
+async function counter(path, start) {
   try {
     const q = new URLSearchParams({ _: Date.now() }); if (start) q.set('start', start);
-    const r = await fetch(`${GC}/counter/site-${encodeURIComponent(name)}.json?${q}`);
-    return num((await r.json()).count);
-  } catch (e) { return 0; }
+    const j = await (await fetch(`${GC}/counter/${encodeURIComponent(path)}.json?${q}`)).json();
+    return { v: num(j.count_unique), p: num(j.count) };
+  } catch (e) { return { v: 0, p: 0 }; }
 }
+const count = (name, start) => counter('site-' + name, start);
 async function title(s) {
   try {
     const t = (await (await fetch(s.url)).text()).match(/<title[^>]*>([^<]*)<\/title>/i);
-    if (t && t[1].trim()) return t[1].trim();
+    if (t && t[1].trim()) { const d = document.createElement('textarea'); d.innerHTML = t[1].trim(); return d.value; }
   } catch (e) {}
   return s.name;
 }
@@ -100,28 +113,44 @@ async function load() {
   await Promise.all(sites.map(async s => {
     [s.total, s.today, s.week, s.title] = await Promise.all([count(s.name), count(s.name, today), count(s.name, week), title(s)]);
   }));
-  sites.sort((a, b) => b.total - a.total || b.week - a.week);
-  const max = Math.max(1, ...sites.map(s => s.total));
-  $('s-today').textContent = fmt(sites.reduce((a, s) => a + s.today, 0));
-  $('s-week').textContent = fmt(sites.reduce((a, s) => a + s.week, 0));
-  $('s-total').textContent = fmt(sites.reduce((a, s) => a + s.total, 0));
+  sites.sort((a, b) => b.total.v - a.total.v || b.total.p - a.total.p);
+  const max = Math.max(1, ...sites.map(s => s.total.v));
+  for (const k of ['today', 'week', 'total']) {
+    $('s-' + k).textContent = fmt(sites.reduce((a, s) => a + s[k].v, 0));
+    $('v-' + k).textContent = fmt(sites.reduce((a, s) => a + s[k].p, 0)) + ' צפיות';
+  }
   const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   $('list').innerHTML = sites.map(s => `
     <div class="site">
       <div class="info">
         <a class="name" href="${s.url}" target="_blank" rel="noopener">${esc(s.title)}</a>
         <div class="url">${esc(s.url.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</div>
-        <div class="bar"><div style="width:${100 * s.total / max}%"></div></div>
+        <div class="bar"><div style="width:${100 * s.total.v / max}%"></div></div>
       </div>
       <div class="nums">
-        <div><b>${fmt(s.today)}</b><small>היום</small></div>
-        <div><b>${fmt(s.week)}</b><small>7 ימים</small></div>
-        <div class="tot"><b>${fmt(s.total)}</b><small>סה״כ</small></div>
+        <div><b>${fmt(s.today.v)}</b><small>היום</small><i>${fmt(s.today.p)} צפיות</i></div>
+        <div><b>${fmt(s.week.v)}</b><small>7 ימים</small><i>${fmt(s.week.p)} צפיות</i></div>
+        <div class="tot"><b>${fmt(s.total.v)}</b><small>מבקרים</small><i>${fmt(s.total.p)} צפיות</i></div>
       </div>
     </div>`).join('');
 }
-$('refresh').addEventListener('click', load);
-load();
+// חמשת הפרקים המובילים: רשימת הפרקים נלקחת ממפת האתר, ולכל פרק נבדק המונה שלו
+async function top5() {
+  const el = $('top5');
+  try {
+    const xml = await (await fetch('https://siporeysaba.com/sitemap.xml')).text();
+    const urls = [...xml.matchAll(/<loc>([^<]*\/ep\/[^<]*)<\/loc>/g)].map(m => m[1]);
+    const eps = await Promise.all(urls.map(async u => ({ u, ...(await counter(new URL(u).pathname)) })));
+    const top = eps.filter(e => e.p > 0).sort((a, b) => b.v - a.v || b.p - a.p).slice(0, 5);
+    if (!top.length) { el.innerHTML = '<li class="sub">עוד אין צפיות בפרקים</li>'; return; }
+    await Promise.all(top.map(async e => { e.t = (await title({ url: e.u, name: e.u })).replace(/\s*\|\s*סיפורי סבא.*$/, ''); }));
+    const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    el.innerHTML = top.map(e => `<li><a href="${e.u}" target="_blank" rel="noopener">${esc(e.t)}</a>
+      <div class="c"><b>${fmt(e.v)}</b><small>מבקרים · ${fmt(e.p)} צפיות</small></div></li>`).join('');
+  } catch (e) { el.innerHTML = '<li class="sub">לא הצלחתי לטעון את רשימת הפרקים</li>'; }
+}
+$('refresh').addEventListener('click', () => { load(); top5(); });
+load(); top5();
 </script>
 </body>
 </html>
