@@ -93,7 +93,8 @@ async function repos() {
 }
 async function counter(path, start) {
   try {
-    const q = new URLSearchParams({ _: Date.now() }); if (start) q.set('start', start);
+    // השרת של GoatCounter שומר תשובה בלי end במטמון הרבה זמן – עם end התשובה תמיד עדכנית
+    const q = new URLSearchParams({ start: start || '2026-11-01', end: ymd(new Date(Date.now() + 2 * 864e5)) });
     const j = await (await fetch(`${GC}/counter/${encodeURIComponent(path)}.json?${q}`)).json();
     return { v: num(j.count_unique), p: num(j.count) };
   } catch (e) { return { v: 0, p: 0 }; }
